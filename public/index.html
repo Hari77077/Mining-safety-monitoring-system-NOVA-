@@ -3,13 +3,151 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Mining Safety Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA — Dashboard</title>
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="dashboard.css">
 </head>
 
 <body>
-    <h1>Mining Safety Monitor</h1>
-    <div id="status">Disconnected</div>
-    <script src="script.js"></script>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <h2>⚒️ NOVA</h2>
+            <span>Mining Safety Monitor</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="index.html"><span class="nav-icon">📊</span> Dashboard</a></li>
+            <li><a href="gas.html"><span class="nav-icon">🧪</span> Gas Analytics</a></li>
+            <li><a href="vibrations.html"><span class="nav-icon">📳</span> Vibrations</a></li>
+            <li><a href="chatbot.html"><span class="nav-icon">🤖</span> AI Chatbot</a></li>
+        </ul>
+        <div class="sidebar-status">
+            <span class="dot"></span>
+            <span class="status-label">Disconnected</span>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="page-header">
+            <h1>Dashboard</h1>
+            <div class="live-badge"><span class="pulse-dot"></span> LIVE</div>
+        </div>
+
+        <!-- Row 1: Safety Status -->
+        <div class="status-banner" id="statusBanner">
+            <div class="status-icon" id="statusIcon">🛡️</div>
+            <div>
+                <div class="status-label-lg" id="statusLabel">WAITING FOR DATA</div>
+                <div class="status-sub">Node: <span id="nodeId">--</span> &nbsp;|&nbsp; RFID: <span id="rfid">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 2: Gas Readings -->
+        <div class="grid-3 section">
+            <div class="card">
+                <div class="card-title">CO (Carbon Monoxide)</div>
+                <div class="card-value"><span id="coPpm">--</span> <span class="card-unit">ppm</span></div>
+            </div>
+            <div class="card">
+                <div class="card-title">CH₄ (Methane)</div>
+                <div class="card-value"><span id="ch4Ppm">--</span> <span class="card-unit">ppm</span></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Hazardous Gases</div>
+                <div class="card-value"><span id="hazPpm">--</span> <span class="card-unit">ppm</span></div>
+            </div>
+        </div>
+
+        <!-- Row 3: AI Predictions -->
+        <div class="grid-3 section">
+            <div class="card prediction-card">
+                <div class="card-title">Wet Bulb Probability</div>
+                <div class="card-value"><span id="wetBulb">--</span><span class="card-unit">%</span></div>
+            </div>
+            <div class="card prediction-card">
+                <div class="card-title">Explosion Risk</div>
+                <div class="card-value risk-text" id="explosionRisk">--</div>
+            </div>
+            <div class="card prediction-card">
+                <div class="card-title">Safety Score</div>
+                <div class="score-display">
+                    <span class="score-value" id="safetyScore">--</span>
+                    <span class="score-max">/ 100</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 4: Air Quality Graph + LoRa + Z-Axis -->
+        <div class="grid-dashboard section">
+            <!-- Live Air Quality Chart -->
+            <div class="card span-chart">
+                <div class="card-title">Live Air Quality</div>
+                <div class="chart-legend">
+                    <span class="legend-item" style="--c: #ef4444;">CO</span>
+                    <span class="legend-item" style="--c: #f97316;">CH₄</span>
+                    <span class="legend-item" style="--c: #a855f7;">Hazardous</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="airQualityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="side-panel">
+                <!-- Z-Axis -->
+                <div class="card">
+                    <div class="card-title">Z-Axis Acceleration</div>
+                    <div class="card-value"><span id="azValue">0.00</span> <span class="card-unit">m/s²</span></div>
+                </div>
+
+                <!-- LoRa Messaging -->
+                <div class="card lora-card">
+                    <div class="card-title">LoRa Messages</div>
+                    <div class="console-box" id="loraLog"></div>
+                    <div class="lora-input">
+                        <input type="text" class="input-field" id="loraInput" placeholder="Send message...">
+                        <button class="btn btn-primary" id="loraSend">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 5: Environment + Workers + Logs -->
+        <div class="grid-3 section">
+            <!-- Environment -->
+            <div class="card">
+                <div class="card-title">Environment</div>
+                <div class="env-row">
+                    <span>🌡️ Temperature</span>
+                    <b id="temp">--</b><span class="card-unit">°C</span>
+                </div>
+                <div class="env-row">
+                    <span>💧 Humidity</span>
+                    <b id="humidity">--</b><span class="card-unit">%</span>
+                </div>
+            </div>
+
+            <!-- Workers at Node -->
+            <div class="card">
+                <div class="card-title">Workers at Node</div>
+                <div class="worker-list" id="workerList">
+                    <div class="empty-state">No workers detected</div>
+                </div>
+            </div>
+
+            <!-- Event Log -->
+            <div class="card">
+                <div class="card-title">Event Log</div>
+                <div class="console-box" id="eventLog"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="shared.js"></script>
+    <script src="dashboard.js"></script>
 </body>
 
 </html>

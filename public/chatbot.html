@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA — AI Chatbot</title>
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="chatbot.css">
+</head>
+
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <h2>⚒️ NOVA</h2>
+            <span>Mining Safety Monitor</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="index.html"><span class="nav-icon">📊</span> Dashboard</a></li>
+            <li><a href="gas.html"><span class="nav-icon">🧪</span> Gas Analytics</a></li>
+            <li><a href="vibrations.html"><span class="nav-icon">📳</span> Vibrations</a></li>
+            <li><a href="chatbot.html"><span class="nav-icon">🤖</span> AI Chatbot</a></li>
+        </ul>
+        <div class="sidebar-status">
+            <span class="dot"></span>
+            <span class="status-label">Disconnected</span>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-header">
+            <h1>AI Safety Assistant</h1>
+            <!-- LLM Toggle -->
+            <div class="llm-toggle">
+                <span class="provider-label active" id="geminiLabel">Gemini</span>
+                <label class="toggle">
+                    <input type="checkbox" id="llmSwitch">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="provider-label" id="llamaLabel">Llama 3.2</span>
+            </div>
+        </div>
+
+        <div class="chatbot-layout">
+            <!-- Chat Panel -->
+            <div class="chat-panel">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="msg bot">
+                        <div class="msg-avatar">🤖</div>
+                        <div class="msg-content">
+                            <div class="msg-name">NOVA AI <span class="provider-tag" id="providerTag">Gemini</span>
+                            </div>
+                            <div class="msg-text">Hello! I'm your mining safety assistant. Ask me about safety
+                                protocols, gas levels, or emergency procedures.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" class="input-field chat-input" id="chatInput"
+                        placeholder="Ask about safety, protocols, readings...">
+                    <button class="btn btn-primary" id="chatSend">Send</button>
+                </div>
+            </div>
+
+            <!-- Right Sidebar: Live Data + Status -->
+            <div class="chat-sidebar">
+                <!-- Safety Status -->
+                <div class="card mini-status-card">
+                    <div class="card-title">Safety Status</div>
+                    <div class="mini-status" id="miniStatus">--</div>
+                    <div class="mini-score">Score: <b id="miniScore">--</b>/100</div>
+                </div>
+
+                <!-- Live Readings -->
+                <div class="card mini-readings">
+                    <div class="card-title">Live Readings</div>
+                    <div class="mini-row"><span>🌡️ Temp</span><b id="miniTemp">--</b>°C</div>
+                    <div class="mini-row"><span>💧 Humidity</span><b id="miniHumid">--</b>%</div>
+                    <div class="mini-row"><span>CO</span><b id="miniCo">--</b> ppm</div>
+                    <div class="mini-row"><span>CH₄</span><b id="miniCh4">--</b> ppm</div>
+                    <div class="mini-row"><span>Hazardous</span><b id="miniHaz">--</b> ppm</div>
+                    <div class="mini-row"><span>AZ</span><b id="miniAz">--</b> m/s²</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="shared.js"></script>
+    <script src="chatbot.js"></script>
+</body>
+
+</html>

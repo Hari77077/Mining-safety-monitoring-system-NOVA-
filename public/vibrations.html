@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA — Vibrations</title>
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="vibrations.css">
+</head>
+
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <h2>⚒️ NOVA</h2>
+            <span>Mining Safety Monitor</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="index.html"><span class="nav-icon">📊</span> Dashboard</a></li>
+            <li><a href="gas.html"><span class="nav-icon">🧪</span> Gas Analytics</a></li>
+            <li><a href="vibrations.html"><span class="nav-icon">📳</span> Vibrations</a></li>
+            <li><a href="chatbot.html"><span class="nav-icon">🤖</span> AI Chatbot</a></li>
+        </ul>
+        <div class="sidebar-status">
+            <span class="dot"></span>
+            <span class="status-label">Disconnected</span>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-header">
+            <h1>Vibration Monitoring</h1>
+            <div class="live-badge"><span class="pulse-dot"></span> LIVE</div>
+        </div>
+
+        <!-- Current Readings -->
+        <div class="grid-3 section">
+            <div class="card accel-card">
+                <div class="card-title">X-Axis Acceleration</div>
+                <div class="card-value" style="color: #38bdf8;"><span id="axVal">0.00</span> <span
+                        class="card-unit">m/s²</span></div>
+                <div class="accel-bar">
+                    <div class="bar-fill bar-x" id="axBar"></div>
+                </div>
+            </div>
+            <div class="card accel-card">
+                <div class="card-title">Y-Axis Acceleration</div>
+                <div class="card-value" style="color: #22c55e;"><span id="ayVal">0.00</span> <span
+                        class="card-unit">m/s²</span></div>
+                <div class="accel-bar">
+                    <div class="bar-fill bar-y" id="ayBar"></div>
+                </div>
+            </div>
+            <div class="card accel-card">
+                <div class="card-title">Z-Axis Acceleration</div>
+                <div class="card-value" style="color: #ef4444;"><span id="azVal">0.00</span> <span
+                        class="card-unit">m/s²</span></div>
+                <div class="accel-bar">
+                    <div class="bar-fill bar-z" id="azBar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Individual Graphs -->
+        <div class="section">
+            <div class="card">
+                <div class="card-title">X-Axis Over Time</div>
+                <div class="chart-container"><canvas id="axChart"></canvas></div>
+            </div>
+        </div>
+        <div class="section">
+            <div class="card">
+                <div class="card-title">Y-Axis Over Time</div>
+                <div class="chart-container"><canvas id="ayChart"></canvas></div>
+            </div>
+        </div>
+        <div class="section">
+            <div class="card">
+                <div class="card-title">Z-Axis Over Time</div>
+                <div class="chart-container"><canvas id="azChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Impact Log -->
+        <div class="section">
+            <div class="card">
+                <div class="card-title">Impact Log</div>
+                <div class="console-box" id="impactLog">
+                    <div class="console-entry system">Monitoring for seismic events...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="shared.js"></script>
+    <script src="vibrations.js"></script>
+</body>
+
+</html>

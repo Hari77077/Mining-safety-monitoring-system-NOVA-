@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA — Gas Analytics</title>
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="gas.css">
+</head>
+
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <h2>⚒️ NOVA</h2>
+            <span>Mining Safety Monitor</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="index.html"><span class="nav-icon">📊</span> Dashboard</a></li>
+            <li><a href="gas.html"><span class="nav-icon">🧪</span> Gas Analytics</a></li>
+            <li><a href="vibrations.html"><span class="nav-icon">📳</span> Vibrations</a></li>
+            <li><a href="chatbot.html"><span class="nav-icon">🤖</span> AI Chatbot</a></li>
+        </ul>
+        <div class="sidebar-status">
+            <span class="dot"></span>
+            <span class="status-label">Disconnected</span>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-header">
+            <h1>Gas Analytics</h1>
+            <div class="live-badge"><span class="pulse-dot"></span> LIVE</div>
+        </div>
+
+        <!-- Current Levels -->
+        <div class="grid-3 section">
+            <div class="card gas-level-card co-card">
+                <div class="card-title">CO (Carbon Monoxide)</div>
+                <div class="card-value"><span id="coLevel">--</span> <span class="card-unit">ppm</span></div>
+                <div class="severity-badge" id="coSeverity">--</div>
+            </div>
+            <div class="card gas-level-card ch4-card">
+                <div class="card-title">CH₄ (Methane)</div>
+                <div class="card-value"><span id="ch4Level">--</span> <span class="card-unit">ppm</span></div>
+                <div class="severity-badge" id="ch4Severity">--</div>
+            </div>
+            <div class="card gas-level-card haz-card">
+                <div class="card-title">Hazardous Gases</div>
+                <div class="card-value"><span id="hazLevel">--</span> <span class="card-unit">ppm</span></div>
+                <div class="severity-badge" id="hazSeverity">--</div>
+            </div>
+        </div>
+
+        <!-- Individual Graphs -->
+        <div class="section">
+            <div class="card">
+                <div class="card-title">CO Levels Over Time</div>
+                <div class="chart-container"><canvas id="coChart"></canvas></div>
+            </div>
+        </div>
+        <div class="section">
+            <div class="card">
+                <div class="card-title">CH₄ Levels Over Time</div>
+                <div class="chart-container"><canvas id="ch4Chart"></canvas></div>
+            </div>
+        </div>
+        <div class="section">
+            <div class="card">
+                <div class="card-title">Hazardous Gas Levels Over Time</div>
+                <div class="chart-container"><canvas id="hazChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Gas Incident Log -->
+        <div class="section">
+            <div class="card">
+                <div class="card-title">Gas Incident Log</div>
+                <div class="console-box" id="gasLog">
+                    <div class="console-entry system">Monitoring for gas anomalies...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="shared.js"></script>
+    <script src="gas.js"></script>
+</body>
+
+</html>

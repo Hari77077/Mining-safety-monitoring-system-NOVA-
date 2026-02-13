@@ -1,0 +1,40 @@
+/* Vibrations Page Styles */
+
+.section {
+    margin-bottom: 1.25rem;
+}
+
+.accel-card {
+    position: relative;
+}
+
+.accel-bar {
+    margin-top: 0.75rem;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.bar-x {
+    background: #38bdf8;
+}
+
+.bar-y {
+    background: #22c55e;
+}
+
+.bar-z {
+    background: #ef4444;
+}
+
+.chart-container canvas {
+    height: 180px !important;
+}
