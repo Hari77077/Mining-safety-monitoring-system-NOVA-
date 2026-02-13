@@ -29,6 +29,10 @@ ENV/
 *.pkl
 *.h5
 
+# Local Database
+*.db
+*.sqlite
+
 # OS specific
 .DS_Store
 Thumbs.db
