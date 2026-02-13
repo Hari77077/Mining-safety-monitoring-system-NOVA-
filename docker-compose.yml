@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ml_service
+    volumes:
+      - .:/app
+
+  ml_service:
+    build:
+      context: ./ml_service
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./ml_service:/app
