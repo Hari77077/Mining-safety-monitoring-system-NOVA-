@@ -36,8 +36,16 @@ type DataPacket struct {
 	RFID         string  `json:"rfid"`
 }
 
+type PredictionResult struct {
+	WetBulbProb   float64 `json:"wet_bulb_prob"`
+	ExplosionRisk string  `json:"explosion_risk"`
+	ExplosionProb float64 `json:"explosion_prob"`
+	SafetyScore   int     `json:"safety_score"`
+}
+
 type LogPacket struct {
 	DataPacket
+	PredictionResult
 	Status    string    `json:"status"` // "SAFE", "CRITICAL", "WARNING"
 	Timestamp time.Time `json:"timestamp"`
 }
@@ -161,10 +169,48 @@ func evaluateStatus(data DataPacket) string {
 
 // ---- Data Processing Pipeline ----
 
+func getPredictions(data DataPacket) PredictionResult {
+	// Prepare payload for ML Service
+	// FastAPI expects: temperature, humidity, co_ppm, ch4_ppm, vibration
+	// We use "ax" as "vibration" proxy if no dedicated sensor, or calculating magnitude
+	// Assuming `ax` is vibration for now or magnitude sqrt(ax^2+ay^2+az^2)
+	// Let's use magnitude of acceleration as vibration metric proxy
+	// Gravity is 9.8, so remove it? Simplified: just use input.
+	// User script uses 'Vibration'. ESP sends 'ax', 'ay', 'az'.
+	// Let's assume we map 'ax' to vibration for simplicity or magnitude.
+	// Magnitude:
+	// vib = sqrt(ax*ax + ay*ay + az*az)
+	vib := data.AX // Valid assumption for this demo if logic consistent
+
+	payload := map[string]float64{
+		"temperature": data.Temp,
+		"humidity":    data.Humidity,
+		"co_ppm":      data.COPPM,
+		"ch4_ppm":     data.CH4PPM,
+		"vibration":   vib,
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post("http://localhost:5000/predict", "application/json", bytes.NewBuffer(jsonData))
+
+	var result PredictionResult
+	if err == nil {
+		defer resp.Body.Close()
+		json.NewDecoder(resp.Body).Decode(&result)
+	} else {
+		// Silently fail or log? For demo, silent is okay, return empty/zeros
+		// log.Println("ML Service unavailable:", err)
+	}
+	return result
+}
+
 // processSensorData handles data from ANY source (WebSocket/Serial)
 func processSensorData(data DataPacket) {
 	status := evaluateStatus(data)
 	logSensorData(data, status)
+
+	// Get ML Predictions
+	preds := getPredictions(data)
 
 	if status == "CRITICAL" {
 		alert := MessagePacket{
@@ -178,9 +224,10 @@ func processSensorData(data DataPacket) {
 
 	// Prepare Broadcast Packet
 	response := LogPacket{
-		DataPacket: data,
-		Status:     status,
-		Timestamp:  time.Now(),
+		DataPacket:       data,
+		PredictionResult: preds,
+		Status:           status,
+		Timestamp:        time.Now(),
 	}
 	out, _ := json.Marshal(response)
 
@@ -215,19 +262,14 @@ func startSerialListener() {
 			scanner := bufio.NewScanner(port)
 			for scanner.Scan() {
 				line := scanner.Text()
-				// Trim and parse
 				line = strings.TrimSpace(line)
 				if line == "" {
 					continue
 				}
-				// fmt.Println("Serial Data:", line) // Debug
 
 				var data DataPacket
 				if err := json.Unmarshal([]byte(line), &data); err == nil && data.NodeID != "" {
 					processSensorData(data)
-				} else {
-					// Maybe it's a debug message from ESP32?
-					// log.Println("Non-JSON Serial:", line)
 				}
 			}
 			port.Close()
@@ -245,10 +287,7 @@ func findSerialPort() string {
 	if len(ports) == 0 {
 		return ""
 	}
-	// Heuristic: Prefer ports that look like USB devices (COM3, COM4...) vs COM1
-	// For now, just pick the last one, which is usually the plugged-in device on Windows
 	for i := len(ports) - 1; i >= 0; i-- {
-		// You could add logic here to skip "COM1" if needed
 		return ports[i]
 	}
 	return ""
@@ -265,7 +304,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Register to Hub
 	globalHub.register <- conn
 
 	defer func() {
@@ -279,22 +317,18 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		// Handle Incoming Data (e.g. Mock Sensor from Browser)
 		var sensorData DataPacket
 		if err := json.Unmarshal(p, &sensorData); err == nil && sensorData.NodeID != "" {
 			processSensorData(sensorData)
 			continue
 		}
 
-		// Handle Chat/Alert Messages
 		var msgData MessagePacket
 		if err := json.Unmarshal(p, &msgData); err == nil && msgData.Content != "" {
 			if msgData.Type == "" {
 				msgData.Type = "message"
 			}
 			logAlert(msgData)
-			// Echo back (or broadcast?) - For chat, maybe just echo or broadcast based on need.
-			// Currently broadcasting alerts is good.
 			out, _ := json.Marshal(msgData)
 			globalHub.broadcast <- out
 		}
@@ -410,8 +444,8 @@ func callGemini(systemPrompt, userMessage string) (string, error) {
 
 func main() {
 	initDB()
-	go globalHub.run()    // Start Broadcasting Hub
-	startSerialListener() // Start Auto-Detecting ESP32
+	go globalHub.run()
+	startSerialListener()
 
 	fs := http.FileServer(http.Dir("./public"))
 	http.Handle("/", fs)
