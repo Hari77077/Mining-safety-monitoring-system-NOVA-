@@ -9,8 +9,12 @@ services:
       - "8080:8080"
     depends_on:
       - ml_service
+      - ollama
     volumes:
       - .:/app
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
 
   ml_service:
     build:
@@ -19,3 +23,26 @@ services:
       - "5000:5000"
     volumes:
       - ./ml_service:/app
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # GPU passthrough: Ollama auto-detects GPU and falls back to CPU if unavailable
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    environment:
+      # Keep model loaded in VRAM indefinitely (0 = never unload)
+      # Ollama auto-falls back to RAM+CPU if VRAM is insufficient
+      - OLLAMA_KEEP_ALIVE=0
+
+volumes:
+  ollama_data:
