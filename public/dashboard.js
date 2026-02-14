@@ -75,15 +75,110 @@
         setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5500);
     }
 
-    function triggerAlarm(status, data) {
-        const cls = NOVA.statusClass(status);
-        if (cls === 'safe') return;
+    // ---- Persistent Alarm System (Premium UI) ----
+    let alarmInterval = null;
+    let activeAlerts = new Set();
 
-        flashScreen();
-        playAlarmBeep(cls);
+    function startPersistentAlarm(type = 'danger', data = {}, reasons = []) {
+        if (alarmInterval) return;
 
-        const details = `CO: ${data.co_ppm || 0} ppm | CH₄: ${data.ch4_ppm || 0} ppm | Temp: ${data.temp || 0}°C`;
-        showAlertToast(status, data.node_id || '--', details);
+        // Generate Hazard HTML
+        const hazardHTML = reasons.map(r => `
+            <div class="hazard-item">
+                <span class="hazard-icon">⚠️</span>
+                <span>${r}</span>
+            </div>
+        `).join('');
+
+        // Gas Specifics (if critical)
+        let gasDetails = '';
+        if (data.ch4_ppm > 2.0 || data.co_ppm > 50) {
+            gasDetails = `
+            <div class="hazard-item">
+                <span class="hazard-icon">☠️</span>
+                <span>Gas Levels Critical (CH4: ${data.ch4_ppm}%, CO: ${data.co_ppm}ppm)</span>
+            </div>`;
+        }
+
+        // Safety Score Grade
+        const score = data.safety_score || 0;
+        const grade = score > 90 ? 'A' : score > 70 ? 'B' : score > 50 ? 'C' : score > 30 ? 'D' : 'F';
+
+        let overlay = document.getElementById('alarmOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'alarmOverlay';
+            overlay.className = 'alarm-overlay-active';
+            document.body.appendChild(overlay);
+        }
+
+        overlay.innerHTML = `
+            <div class="alarm-modal-premium">
+                <div class="alarm-header">
+                    <span class="alarm-header-icon">🚨</span>
+                    <h1>CRITICAL ALERT</h1>
+                </div>
+                
+                <div class="hazard-list">
+                    ${gasDetails}
+                    ${hazardHTML}
+                    <div class="hazard-item">
+                        <span class="hazard-icon">🛡️</span>
+                        <span>Safety Score: ${score}/100 (Grade ${grade})</span>
+                    </div>
+                </div>
+
+                <div class="protocol-section">
+                    <h3>✚ EMERGENCY PROTOCOLS</h3>
+                    <div class="protocol-box">
+                        <strong>EMG-002: IMMEDIATE EVACUATION</strong>
+                        <p>Methane/Hazards Detected. Kill all electrical equipment. Evacuate via nearest exit.</p>
+                    </div>
+                </div>
+
+                <button id="ackBtn" class="btn-premium-ack">✓ ACKNOWLEDGE & DISMISS</button>
+            </div>
+        `;
+
+        document.getElementById('ackBtn').onclick = () => stopPersistentAlarm();
+
+        // Loop Sound
+        const freq = type === 'extreme' ? 880 : 660;
+        alarmInterval = setInterval(() => {
+            playTone(freq, 0.3);
+        }, 1000);
+    }
+
+    function stopPersistentAlarm() {
+        if (alarmInterval) {
+            clearInterval(alarmInterval);
+            alarmInterval = null;
+        }
+        const overlay = document.getElementById('alarmOverlay');
+        if (overlay) overlay.remove();
+
+        activeAlerts.clear();
+        NOVA.speakAlert("Alarm Silenced. Protocols Active.");
+    }
+
+    function playTone(freq, dur) {
+        if (!audioCtx) initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'square';
+        gain.gain.value = 0.1;
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+    }
+
+    function triggerAlarm(status, data, reasons = []) {
+        // ONLY trigger for concerning levels
+        if (status !== 'CRITICAL' && status !== 'EXTREME DANGER') return;
+
+        startPersistentAlarm(status === 'EXTREME DANGER' ? 'extreme' : 'danger', data, reasons);
     }
 
     // ---- Multi-line Air Quality Chart ----
@@ -164,6 +259,12 @@
                 if (e.key === 'Enter') sendLoRa(input, log);
             });
         }
+
+        // Listen for Incoming Messages
+        NOVA.onMessage((msg) => {
+            // "no need to show the lora packet json" -> Just show sender and content
+            addLoRaEntry(log, `${msg.node_id || 'NODE'}: ${msg.content}`, 'info');
+        });
     }
 
     function sendLoRa(input, log) {
@@ -215,7 +316,13 @@
         document.getElementById('hazPpm').textContent = NOVA.fmt(data.hazardous_ppm);
 
         // AI Predictions (placeholder until ML connected)
-        document.getElementById('wetBulb').textContent = data.wet_bulb_prob != null ? NOVA.fmt(data.wet_bulb_prob) : '--';
+        // wet_bulb_prob is 0-1. Format as %.
+        let wbProb = data.wet_bulb_prob != null ? data.wet_bulb_prob : 0;
+        if (wbProb > 1) wbProb = wbProb / 100; // Auto-correction if scaled
+        if (wbProb > 1) wbProb = 1; // Cap at 100%
+
+        document.getElementById('wetBulb').textContent = (wbProb * 100).toFixed(0) + '%';
+
         document.getElementById('explosionRisk').textContent = data.explosion_risk || '--';
         if (data.safety_score != null) {
             document.getElementById('safetyScore').textContent = Math.round(data.safety_score);
@@ -231,10 +338,58 @@
         // Air quality chart
         pushAirData(data);
 
-        // Workers tracking
+        // Workers tracking is now handled by shared.js
+        /*
         if (data.rfid && data.rfid !== '--') {
             workers.set(data.rfid, { node: data.node_id, time: new Date().toLocaleTimeString() });
             updateWorkerList();
+        }
+        */
+
+        // ---- Specific Hazard Checks (Persistent) ----
+        let detectedHazards = [];
+
+        // Normalize Wet Bulb (Handle 0-100 vs 0-1)
+        let wbVal = data.wet_bulb_prob != null ? data.wet_bulb_prob : 0;
+        if (wbVal > 1) wbVal = wbVal / 100; // Treat 19 as 0.19
+
+        // 1. Wet Bulb (Heat Stress)
+        // STRICT: > 85% probability (0.85)
+        if (wbVal > 0.85) {
+            const msg = `Critical Heat Stress Risk (${(wbVal * 100).toFixed(0)}%)`;
+            detectedHazards.push(msg);
+            NOVA.addLog(msg, 'alert');
+            if (!alarmInterval) NOVA.speakAlert(msg);
+        }
+
+        // 2. Explosion Risk - Strict Check
+        // Only if Logic says CRITICAL *AND* there is actual gas present (Sanity Check)
+        // Prevents ghost "CRITICAL" states if ML misfires on empty data
+        if (data.explosion_risk === 'CRITICAL' && (data.ch4_ppm > 0.5 || data.co_ppm > 10)) {
+            const msg = `Explosion Risk Critical (Methane: ${data.ch4_ppm}%)`;
+            detectedHazards.push(msg);
+            NOVA.addLog(msg, 'alert');
+            if (!alarmInterval) NOVA.speakAlert("Danger. Explosion Risk Critical. Evacuate Immediately.");
+        } else if (data.explosion_risk === 'CRITICAL') {
+            console.warn("Suppressing Empty Explosion Alert (No Gas Detected)");
+        }
+
+        // 3. Fall Detection (Accelerometer) - Strict Check
+        const ax = data.ax || 0;
+        const ay = data.ay || 0;
+        const az = data.az || 0;
+        const g = Math.sqrt(ax * ax + ay * ay + az * az);
+
+        if (g < 0.3) { // Lower threshold to avoid random false positives
+            const msg = "Man Down Detected";
+            detectedHazards.push(msg);
+            NOVA.addLog(msg, 'alert');
+            if (!alarmInterval) NOVA.speakAlert("Alert. Man Down.");
+        }
+
+        // Trigger Persistent Alarm if ANY strict hazard found
+        if (detectedHazards.length > 0) {
+            triggerAlarm('CRITICAL', data, detectedHazards);
         }
 
         // Event log
@@ -243,15 +398,6 @@
         }
     });
 
-    function updateWorkerList() {
-        const container = document.getElementById('workerList');
-        if (!container) return;
-        container.innerHTML = '';
-        workers.forEach((info, rfid) => {
-            const el = document.createElement('div');
-            el.className = 'worker-entry';
-            el.textContent = `${rfid} @ ${info.node} (${info.time})`;
-            container.appendChild(el);
-        });
-    }
+    // Workers tracking handled by shared.js (NOVA)
+    // Removed duplicate logic here.
 })();

@@ -16,6 +16,27 @@ const NOVA = (() => {
 
     // --- VOICE ALERT SYSTEM (JARVIS STYLE) ---
     let lastSpoken = 0;
+    let voice = null;
+    let audioUnlocked = false;
+
+    // Load Voice Async
+    function loadVoice() {
+        const voices = window.speechSynthesis.getVoices();
+        voice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Male')) || voices[0];
+    }
+    window.speechSynthesis.onvoiceschanged = loadVoice;
+    setTimeout(loadVoice, 500); // Fallback
+
+    // Unlock Audio on First Click
+    document.addEventListener('click', () => {
+        if (!audioUnlocked) {
+            const temp = new SpeechSynthesisUtterance('');
+            window.speechSynthesis.speak(temp);
+            audioUnlocked = true;
+            console.log('[Audio] System Unlocked');
+        }
+    }, { once: true });
+
     function speakAlert(message) {
         // Prevent spamming (throttle 10s)
         const now = Date.now();
@@ -23,15 +44,15 @@ const NOVA = (() => {
 
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(message);
-            // Select a cool voice if available
-            const voices = window.speechSynthesis.getVoices();
-            const maleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Male'));
-            if (maleVoice) utterance.voice = maleVoice;
+            if (!voice) loadVoice();
+            if (voice) utterance.voice = voice;
 
             utterance.rate = 1.0;
             utterance.pitch = 1.0;
+            utterance.volume = 1.0;
             window.speechSynthesis.speak(utterance);
             lastSpoken = now;
+            console.log(`[Voice] Speaking: "${message}"`);
         }
     }
 
@@ -39,43 +60,156 @@ const NOVA = (() => {
     let socket = null;
     let latestData = null;
     const listeners = [];
+    const messageListeners = [];
 
-    // ---- WebSocket ----
     function connect() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
-
-        socket = new WebSocket(wsUrl);
+        socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
         socket.onopen = () => {
+            console.log('[WS] Connected');
             updateConnectionUI(true);
-            addLog('WebSocket connected', 'info');
+        };
+
+        socket.onclose = () => {
+            console.log('[WS] Disconnected');
+            updateConnectionUI(false);
+            setTimeout(connect, 3000);
         };
 
         socket.onmessage = (event) => {
             try {
-                const packet = JSON.parse(event.data);
-                if (packet.node_id) {
-                    latestData = packet;
-                    listeners.forEach(fn => fn(packet));
-                } else if (packet.type === 'alert' || packet.type === 'message') {
-                    addLog(`${packet.type.toUpperCase()}: ${packet.content}`, 'alert');
+                const data = JSON.parse(event.data);
+
+                // Route Packet Type
+                if (data.type === 'message') {
+                    // It's a LoRa Message (Text)
+                    messageListeners.forEach(cb => cb(data));
+                } else {
+                    // It's Sensor Data
+                    latestData = data;
+                    listeners.forEach(cb => cb(data));
                 }
             } catch (e) {
-                console.error('Parse error:', e);
+                console.error('[WS] Parse error:', e);
             }
         };
-
-        socket.onclose = () => {
-            updateConnectionUI(false);
-            addLog('Connection lost. Reconnecting in 3s...', 'warn');
-            setTimeout(connect, 3000);
-        };
-
-        socket.onerror = () => {
-            addLog('WebSocket error', 'alert');
-        };
     }
+
+    // Workers List (Reset on reload as per request 'no workers at start')
+    // To persist, uncomment localStorage load. 
+    // let rawWorkers = JSON.parse(localStorage.getItem('nova_workers') || '[]');
+    let rawWorkers = [];
+    let workers = rawWorkers;
+    localStorage.setItem('nova_workers', JSON.stringify(workers));
+
+    function updateWorkerListUI() {
+        // Find the worker list container (only exists on Dashboard)
+        const listEl = document.getElementById('workerList');
+        const countEl = document.getElementById('workerCount');
+
+        if (countEl) countEl.textContent = workers.length;
+
+        if (listEl) {
+            listEl.innerHTML = '';
+            if (workers.length === 0) {
+                listEl.innerHTML = '<div class="empty-state">No workers detected</div>';
+            } else {
+                workers.forEach(w => {
+                    const el = document.createElement('div');
+                    el.className = 'worker-tag';
+                    el.title = "Click to Manual Check-Out";
+                    el.style.cursor = "pointer";
+                    // Add Click Handler
+                    el.onclick = () => manualCheckout(w.id);
+                    el.innerHTML = `<span>👤 ${w.id}</span> <span class="time">${w.time}</span>`;
+                    listEl.appendChild(el);
+                });
+            }
+        }
+    }
+
+    function manualCheckout(id) {
+        if (confirm(`Manually check out worker ${id}?`)) {
+            const idx = workers.findIndex(w => w.id === id);
+            if (idx >= 0) {
+                workers.splice(idx, 1);
+                localStorage.setItem('nova_workers', JSON.stringify(workers));
+                updateWorkerListUI();
+            }
+        }
+    }
+
+    function handleRFID(rawTag) {
+        if (!rawTag) return;
+        const tag = String(rawTag).trim().toUpperCase(); // Force string, trim, UPPERCASE
+        if (tag === "0" || tag === "" || tag === "NULL") return;
+
+        console.log(`[RFID] Processing: "${tag}"`);
+
+        // CHECK-IN / CHECK-OUT LOGIC
+        const idx = workers.findIndex(w => w.id === tag);
+
+        if (idx >= 0) {
+            // Found -> Check Out
+            workers.splice(idx, 1);
+            const msg = `Worker ${tag} Checked OUT`;
+            addLog(msg, 'info');
+            console.log(`[RFID] ${msg}`);
+            speakAlert(msg);
+        } else {
+            // Not Found -> Check In
+            workers.push({ id: tag, time: new Date().toLocaleTimeString() });
+            const msg = `Worker ${tag} Checked IN`;
+            addLog(msg, 'info');
+            console.log(`[RFID] ${msg}`);
+            speakAlert(msg);
+        }
+
+        // Save & Update
+        localStorage.setItem('nova_workers', JSON.stringify(workers));
+        updateWorkerListUI();
+    }
+
+    // Time-Based Debounce with Persistence
+    // We allow re-scanning the same tag after 5 seconds.
+    // This fixes the "Stuck" issue if the firmware never sends "0".
+    let lastProcessedTag = localStorage.getItem('nova_last_tag') || "";
+    let lastProcessedTime = 0; // Start at 0 to detect "Fresh Load"
+
+    function processRFID(tag) {
+        if (!tag) return;
+        const cleanTag = String(tag).trim().toUpperCase();
+        if (cleanTag.length < 3) return;
+
+        const now = Date.now();
+
+        if (cleanTag === lastProcessedTag) {
+            // Same Tag Logic
+
+            // 1. If First Sight after Reload (Time is 0), IGNORE it (Ghost Fix)
+            if (lastProcessedTime === 0) {
+                console.log(`[RFID] Suppressing Ghost (Fresh Load): ${cleanTag}`);
+                lastProcessedTime = now;
+                return;
+            }
+
+            // 2. Debounce (Wait 3s to Toggle) - Reduced from 5s
+            if (now - lastProcessedTime < 3000) {
+                console.log(`[RFID] Debounce Blocked: ${cleanTag} (${Math.round((3000 - (now - lastProcessedTime)) / 100)}ms left)`);
+                return;
+            }
+        }
+
+        console.log(`[RFID] Processing Event: ${cleanTag}`);
+        // Process New or Timed-Out Tag
+        lastProcessedTag = cleanTag;
+        lastProcessedTime = now;
+        localStorage.setItem('nova_last_tag', cleanTag);
+
+        handleRFID(cleanTag);
+    }
+
 
     function send(data) {
         if (socket && socket.readyState === WebSocket.OPEN) {
@@ -98,6 +232,10 @@ const NOVA = (() => {
 
     function getLatest() {
         return latestData;
+    }
+
+    function onMessage(callback) {
+        messageListeners.push(callback);
     }
 
     // ---- Logging ----
@@ -189,6 +327,13 @@ const NOVA = (() => {
             grad.addColorStop(1, 'transparent');
             ctx.fillStyle = grad;
             ctx.fill();
+
+            // Y-Axis Labels (Min/Max)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = '10px Inter';
+            ctx.textAlign = 'right';
+            ctx.fillText(Math.round(max), w - 5, 12);
+            ctx.fillText(Math.round(min), w - 5, h - 5);
         }
 
         return { push, data };
@@ -215,11 +360,27 @@ const NOVA = (() => {
         return map[status] || 'safe';
     }
 
+    function clearWorkers() {
+        workers = [];
+        localStorage.removeItem('nova_workers');
+        localStorage.removeItem('nova_last_tag');
+        lastProcessedTag = "";
+        lastProcessedTime = 0;
+        updateWorkerListUI();
+        addLog("System Reset: All workers cleared", "warning");
+    }
+
     // ---- Init ----
     document.addEventListener('DOMContentLoaded', () => {
         initNav();
         connect();
+        updateWorkerListUI(); // Load persisted list
+
+        // Listen for data to trigger RFID check
+        onData((d) => {
+            if (d.rfid && d.rfid != "0000000000004000" && d.rfid != "0") processRFID(d.rfid);
+        });
     });
 
-    return { onData, getLatest, send, addLog, createLineChart, fmt, statusClass };
+    return { onData, onMessage, getLatest, send, addLog, speakAlert, createLineChart, fmt, statusClass, getWorkers: () => workers, clearWorkers };
 })();

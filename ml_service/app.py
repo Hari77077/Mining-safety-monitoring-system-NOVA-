@@ -32,13 +32,44 @@ def predict_explosion_risk(ch4, co, temp):
 
 def calculate_safety_score(data):
     score = 100
-    score -= min(data.get('co_ppm', 0) / 2.0, 30)
-    score -= min(data.get('ch4_ppm', 0) * 5.0, 40)
     
-    if data.get('temp', 0) > 40: score -= 10
-    if data.get('humidity', 0) > 90: score -= 5
-    if data.get('hazardous_ppm', 0) > 20: score -= 15
+    # 1. Gas Penalties (Linear & Accumulative)
+    co = data.get('co_ppm', 0)
+    ch4 = data.get('ch4_ppm', 0)
+    haz = data.get('hazardous_ppm', 0)
     
+    score -= (co * 0.8)  # 50ppm -> -40 pts
+    score -= (ch4 * 15.0) # 2% -> -30 pts
+    score -= (haz * 0.5)
+    
+    # 2. Environmental Penalties
+    temp = data.get('temp', 0)
+    hum = data.get('humidity', 0)
+    
+    wbgt = temp * 0.7 + (hum * 0.1)
+    if wbgt > 28: score -= (wbgt - 28) * 5  # Heat stress penalty
+
+    # 3. Accelerometer (Fall/Impact)
+    # Norm-G (Assume 1G is normal. <0.5 is freefall, >2.5 is crash)
+    ax = data.get('ax', 0)
+    ay = data.get('ay', 0)
+    az = data.get('az', 1.0)
+    g_force = (ax**2 + ay**2 + az**2) ** 0.5
+    
+    if g_force < 0.5: # Free fall
+        score -= 50
+    if g_force > 3.0: # Impact
+        score -= 40
+
+    # 4. Critical Overrides (Safety Net)
+    # If ANY metric is critical, Maximum Score is capped at 40.
+    is_critical = False
+    if co > 50 or ch4 > 2.5 or haz > 50 or g_force < 0.5:
+        is_critical = True
+        
+    if is_critical and score > 40:
+        score = 40
+        
     return max(int(score), 0)
 
 # --- API Endpoints ---
@@ -69,6 +100,40 @@ def safety_score():
     data = request.json
     score = calculate_safety_score(data)
     return jsonify({"score": score})
+
+@app.route('/predict', methods=['POST'])
+def predict_all():
+    data = request.json
+    # Extract inputs matching main.go payload
+    temp = data.get('temperature', 25.0)
+    hum = data.get('humidity', 50.0)
+    co = data.get('co_ppm', 0.0)
+    ch4 = data.get('ch4_ppm', 0.0)
+    vib = data.get('vibration', 0.0)
+    
+    # Calculate predictions
+    wb_prob = predict_wet_bulb(temp, hum)
+    risk, expl_prob = predict_explosion_risk(ch4, co, temp)
+    
+    # Map for Safety Score
+    score_data = {
+        'co_ppm': co,
+        'ch4_ppm': ch4,
+        'temp': temp,
+        'humidity': hum,
+        'hazardous_ppm': 0, 
+        'ax': vib, # Proxy vibration as acceleration magnitude
+        'ay': 0,
+        'az': 0
+    }
+    score = calculate_safety_score(score_data)
+    
+    return jsonify({
+        "wet_bulb_prob": wb_prob,
+        "explosion_risk": risk,
+        "explosion_prob": expl_prob,
+        "safety_score": score
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

@@ -132,7 +132,11 @@
 
             <!-- Workers at Node -->
             <div class="card">
-                <div class="card-title">Workers at Node</div>
+                <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                    Workers at Node (<span id="workerCount">0</span>)
+                    <button onclick="NOVA.clearWorkers()"
+                        style="background: rgba(255, 59, 48, 0.2); border: 1px solid rgba(255, 59, 48, 0.5); color: #ff453a; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">Reset</button>
+                </div>
                 <div class="worker-list" id="workerList">
                     <div class="empty-state">No workers detected</div>
                 </div>

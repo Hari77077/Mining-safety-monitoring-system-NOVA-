@@ -444,10 +444,87 @@ func callGemini(systemPrompt, userMessage string) (string, error) {
 	return "", fmt.Errorf("gemini error: %v", res)
 }
 
+// ---- Log Rotation / Archiving ----
+
+const DB_LOG_THRESHOLD = 10000 // Archive after 10k records
+
+func checkAndArchiveDB() {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM sensor_logs").Scan(&count)
+	if err != nil {
+		log.Println("DB Count Error:", err)
+		return
+	}
+
+	if count < DB_LOG_THRESHOLD {
+		return
+	}
+
+	fmt.Println("Database threshold reached. Archiving logs...")
+
+	// 1. Generate Filename
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("./logs/mining_data_%s.csv", timestamp)
+	file, err := os.Create(filename)
+	if err != nil {
+		log.Println("Failed to create archive file:", err)
+		return
+	}
+	defer file.Close()
+
+	// 2. Write CSV Header
+	writer := bufio.NewWriter(file)
+	writer.WriteString("id,node_id,temp,humidity,ax,ay,az,x,y,z,co_ppm,ch4_ppm,hazardous_ppm,rfid,status,timestamp\n")
+
+	// 3. Dump Data
+	rows, err := db.Query("SELECT * FROM sensor_logs")
+	if err != nil {
+		log.Println("Failed to query logs for archive:", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var nodeID, rfid, status, ts string
+		var temp, hum, ax, ay, az, x, y, z, co, ch4, haz float64
+		rows.Scan(&id, &nodeID, &temp, &hum, &ax, &ay, &az, &x, &y, &z, &co, &ch4, &haz, &rfid, &status, &ts)
+		line := fmt.Sprintf("%d,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%s,%s,%s\n",
+			id, nodeID, temp, hum, ax, ay, az, x, y, z, co, ch4, haz, rfid, status, ts)
+		writer.WriteString(line)
+	}
+	writer.Flush()
+	fmt.Printf("Archived %d records to %s\n", count, filename)
+
+	// 4. Clear DB
+	_, err = db.Exec("DELETE FROM sensor_logs")
+	if err != nil {
+		log.Println("Failed to clear sensor_logs:", err)
+	}
+	_, err = db.Exec("DELETE FROM alert_logs") // Clear alerts too
+	if err != nil {
+		log.Println("Failed to clear alert_logs:", err)
+	}
+
+	// 5. Optimize
+	db.Exec("VACUUM")
+	fmt.Println("Database reset complete.")
+}
+
+func startLogRotator() {
+	go func() {
+		for {
+			time.Sleep(1 * time.Minute) // Check every minute
+			checkAndArchiveDB()
+		}
+	}()
+}
+
 func main() {
 	initDB()
 	go globalHub.run()
 	startSerialListener()
+	startLogRotator() // Start the rotation background task
 
 	fs := http.FileServer(http.Dir("./public"))
 	http.Handle("/", fs)
