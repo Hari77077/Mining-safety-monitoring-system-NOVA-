@@ -4,6 +4,37 @@
    ======================================== */
 
 const NOVA = (() => {
+    // --- SHARED UTILS ---
+    const updates = {
+        temp: 0,
+        humidity: 0,
+        methane: 0,
+        co: 0,
+        vibration: 0,
+        dust: 0
+    };
+
+    // --- VOICE ALERT SYSTEM (JARVIS STYLE) ---
+    let lastSpoken = 0;
+    function speakAlert(message) {
+        // Prevent spamming (throttle 10s)
+        const now = Date.now();
+        if (now - lastSpoken < 10000) return;
+
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(message);
+            // Select a cool voice if available
+            const voices = window.speechSynthesis.getVoices();
+            const maleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Male'));
+            if (maleVoice) utterance.voice = maleVoice;
+
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+            lastSpoken = now;
+        }
+    }
+
     // ---- State ----
     let socket = null;
     let latestData = null;
