@@ -23,6 +23,7 @@ services:
       - "5000:5000"
     volumes:
       - ./ml_service:/app
+      - ./models:/app/models
 
   ollama:
     image: ollama/ollama:latest

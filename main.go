@@ -34,6 +34,8 @@ type DataPacket struct {
 	CH4PPM       float64 `json:"ch4_ppm"`
 	HazardousPPM float64 `json:"hazardous_ppm"`
 	RFID         string  `json:"rfid"`
+	Message      string  `json:"message"`
+	Buzzer       bool    `json:"buzzer"`
 }
 
 type PredictionResult struct {
