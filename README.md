@@ -4,14 +4,14 @@ A comprehensive IoT-based safety monitoring system for mining environments, feat
 
 ## 👥 The Team
 
-This project was built with ❤️ by:
+This project was built with by:
 
-*   **[User Name]** - Full Stack Developer & System Architect 🚀
-*   **Afin S Das** (`afinsdas@gmail.com`) - ML Engineer (Data Pipeline & Models) 🧠
-*   **Abel Mathews** (`mathewsabel148@gmail.com`) - ML Operations (FastAPI & Docker) ⚙️
-*   **[Hardware Lead Name]** - IoT Hardware & Electronics 🛠️
+*   **Harinandan N S** - Full Stack Developer & Backend Architecture and containerisation
+*   **Afin S Das** (`afinsdas@gmail.com`) -  ML Engineer (Data Pipeline & Models) 
+*   **Abel Mathews** (`mathewsabel148@gmail.com`) - Full Stack and ML Operations (FastAPI & Docker) 
+*   **Niran K Shajil** - IoT Hardware & Electronics and containersation
 
-## 🌟 Key Features
+##  Key Features
 -   **Real-time Monitoring:** Temperature, Humidity, CO, CH4, Vibration.
 -   **AI Risk Analysis:** 
     -   *Wet Bulb Prediction* (Random Forest)

@@ -363,33 +363,59 @@
         }
 
         // 2. Explosion Risk - Strict Check
-        // Only if Logic says CRITICAL *AND* there is actual gas present (Sanity Check)
-        // Prevents ghost "CRITICAL" states if ML misfires on empty data
-        if (data.explosion_risk === 'CRITICAL' && (data.ch4_ppm > 0.5 || data.co_ppm > 10)) {
-            const msg = `Explosion Risk Critical (Methane: ${data.ch4_ppm}%)`;
+        // DEMO MODE: Adjusted for "Moderately High" values to be demonstrable.
+        // Alarm at > 2.0% CH4 or > 40ppm CO.
+        // 2. Explosion Risk - Strict Check
+        // EVALUATION FIX: Raised to > 2.5% CH4 / > 50ppm CO to filter noise.
+        // Alarm at > 2.5% CH4 or > 50ppm CO.
+        if (data.explosion_risk === 'CRITICAL' && (data.ch4_ppm > 2.5 || data.co_ppm > 50)) {
+            const msg = `Explosion Risk Critical (Methane: ${data.ch4_ppm}%, CO: ${data.co_ppm}ppm)`;
             detectedHazards.push(msg);
             NOVA.addLog(msg, 'alert');
             if (!alarmInterval) NOVA.speakAlert("Danger. Explosion Risk Critical. Evacuate Immediately.");
         } else if (data.explosion_risk === 'CRITICAL') {
-            console.warn("Suppressing Empty Explosion Alert (No Gas Detected)");
+            console.warn("Suppressing Empty Explosion Alert");
         }
 
-        // 3. Fall Detection (Accelerometer) - Strict Check
+        // 3. Accelerometer (Structure/Device Stability)
+        // Wall Mounted: <0.3G (Dislodge). >2.5G (Impact).
         const ax = data.ax || 0;
         const ay = data.ay || 0;
         const az = data.az || 0;
         const g = Math.sqrt(ax * ax + ay * ay + az * az);
 
-        if (g < 0.3) { // Lower threshold to avoid random false positives
-            const msg = "Man Down Detected";
+        if (g < 0.3) {
+            const msg = "CRITICAL: Device Dislodged (Freefall)";
             detectedHazards.push(msg);
             NOVA.addLog(msg, 'alert');
-            if (!alarmInterval) NOVA.speakAlert("Alert. Man Down.");
+            if (!alarmInterval) NOVA.speakAlert("Alert. Device Dislodged.");
+        }
+        if (g > 2.5) {
+            const msg = "CRITICAL: Structural Impact Detected";
+            detectedHazards.push(msg);
+            NOVA.addLog(msg, 'alert');
+            if (!alarmInterval) NOVA.speakAlert("Danger. Structural Impact Detected.");
         }
 
-        // Trigger Persistent Alarm if ANY strict hazard found
-        if (detectedHazards.length > 0) {
-            triggerAlarm('CRITICAL', data, detectedHazards);
+        // 4. Critical Overrides (Safety Net)
+        // USER REQUEST: "Safety score 85 should be main alert zone"
+        // If Safety Score is Healthy (>= 85), SUPPRESS ALL PERSISTENT ALARMS.
+        // We still log them, but we do NOT show the Red Window.
+
+        let score = data.safety_score != null ? data.safety_score : 100;
+
+        if (score >= 85) {
+            // Safe Zone - Suppress Critical UI
+            if (detectedHazards.length > 0) {
+                console.log(`Suppressed ${detectedHazards.length} alerts because Safety Score is High (${score})`);
+                // Optional: Just show toast/log, not the full TriggerAlarm('CRITICAL')
+                // We do nothing here, letting the UI stay green/blue.
+            }
+        } else {
+            // Danger Zone (< 85) - Allow Alarms
+            if (detectedHazards.length > 0) {
+                triggerAlarm('CRITICAL', data, detectedHazards);
+            }
         }
 
         // Event log

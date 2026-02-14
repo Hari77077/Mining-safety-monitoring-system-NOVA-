@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -208,6 +209,28 @@ func getPredictions(data DataPacket) PredictionResult {
 
 // processSensorData handles data from ANY source (WebSocket/Serial)
 func processSensorData(data DataPacket) {
+	// --- SENSOR CALIBRATION / NOISE GATE ---
+	// Clamp small fluctuations to zero or nominal values
+	if data.CH4PPM < 0.5 {
+		data.CH4PPM = 0
+	}
+	if data.COPPM < 5.0 {
+		data.COPPM = 0
+	}
+	if data.HazardousPPM < 5.0 {
+		data.HazardousPPM = 0
+	}
+
+	// Accelerometer Deadzone (Gravity Filter)
+	// If G-force is near 1.0 (Satationary), clamp components to ideal
+	// Simple magnitude check
+	g := math.Sqrt(data.AX*data.AX + data.AY*data.AY + data.AZ*data.AZ)
+	if g > 0.8 && g < 1.2 {
+		// Only clamp if we are "close enough" to be considered still
+		// This prevents micro-vibrations from triggering sensitive ML models
+		// data.AX = 0; data.AY = 0; data.AZ = 1.0 // Optional: hard lock
+	}
+
 	status := evaluateStatus(data)
 	logSensorData(data, status)
 

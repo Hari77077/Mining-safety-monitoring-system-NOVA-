@@ -16,17 +16,32 @@ def predict_wet_bulb(temp, humidity):
     return 0.05
 
 def predict_explosion_risk(ch4, co, temp):
-    # Normalize inputs
+    # Standard: LEL of Methane is 5.0% Vol.
+    # 1.0% = 20% LEL (Warning)
+    # 2.5% = 50% LEL (Critical/Evacuate)
+    
+    # Normalize inputs for probability calc (0-1)
     p_ch4 = min(ch4 / 5.0, 1.0) 
     p_co = min(co / 300.0, 1.0)
     p_temp = min(max(temp - 30, 0) / 50.0, 1.0)
     
-    risk_prob = (p_ch4 * 0.6) + (p_co * 0.3) + (p_temp * 0.1)
+    # Weighted Probability
+    risk_prob = (p_ch4 * 0.7) + (p_co * 0.2) + (p_temp * 0.1)
     
     risk_level = "LOW"
-    if risk_prob > 0.8: risk_level = "CRITICAL"
-    elif risk_prob > 0.5: risk_level = "HIGH"
-    elif risk_prob > 0.2: risk_level = "MEDIUM"
+    # Strict Thresholds based on Methane Vol %
+    # Demo Mode: Lowered for easier triggering
+    risk_level = "LOW"
+    # Strict Thresholds based on Methane Vol %
+    # EVALUATION FIX: Raised to > 2.5% to prevent fluctuation alarms
+    if ch4 > 2.5 or co > 50:
+        risk_level = "CRITICAL"
+        risk_prob = max(risk_prob, 0.95) # Force high prob
+    elif ch4 > 1.0 or co > 30:
+        risk_level = "HIGH" # Warning Zone
+        risk_prob = max(risk_prob, 0.60)
+    elif ch4 > 0.5:
+        risk_level = "MEDIUM"
         
     return risk_level, min(risk_prob, 0.99)
 
@@ -38,37 +53,52 @@ def calculate_safety_score(data):
     ch4 = data.get('ch4_ppm', 0)
     haz = data.get('hazardous_ppm', 0)
     
-    score -= (co * 0.8)  # 50ppm -> -40 pts
-    score -= (ch4 * 15.0) # 2% -> -30 pts
+    # CO: 50ppm is limit. 
+    score -= (co * 1.0)  # 25ppm -> -25 pts (Warning range)
+    
+    # CH4: Brutal Penalty in Warning Range (1.0 - 2.5%)
+    # 1.3% -> ~70 pt penalty (Score 30 -> Grade F)
+    # This warns the user heavily via Score/Grade without triggering Evac Alarm
+    score -= (ch4 * 55.0) 
+    
     score -= (haz * 0.5)
     
     # 2. Environmental Penalties
     temp = data.get('temp', 0)
     hum = data.get('humidity', 0)
     
-    wbgt = temp * 0.7 + (hum * 0.1)
-    if wbgt > 28: score -= (wbgt - 28) * 5  # Heat stress penalty
+    wbgt = temp * 0.7 + (hum * 0.1) 
+    if wbgt > 28: score -= (wbgt - 28) * 8  # Heat stress penalty increased
 
-    # 3. Accelerometer (Fall/Impact)
-    # Norm-G (Assume 1G is normal. <0.5 is freefall, >2.5 is crash)
+    # 3. Accelerometer (Device Stability / Structural Vibration)
+    # Wall Mounted: <0.3 is device fall, >3.0 is explosion shockwave/impact
     ax = data.get('ax', 0)
     ay = data.get('ay', 0)
     az = data.get('az', 1.0)
     g_force = (ax**2 + ay**2 + az**2) ** 0.5
     
-    if g_force < 0.5: # Free fall
+    if g_force < 0.3: # Device Fell off wall
         score -= 50
-    if g_force > 3.0: # Impact
-        score -= 40
+    if g_force > 3.0: # Impact / Shockwave
+        score -= 50
 
     # 4. Critical Overrides (Safety Net)
-    # If ANY metric is critical, Maximum Score is capped at 40.
+    # If ANY metric is CRITICAL (Evacuation Level), Maximum Score is 0.
+    # 4. Critical Overrides (Safety Net)
+    # If ANY metric is CRITICAL (Evacuation Level), Maximum Score is 0.
     is_critical = False
-    if co > 50 or ch4 > 2.5 or haz > 50 or g_force < 0.5:
+    
+    # Methane > 2.0% (Matched to Demo)
+    # CO > 40ppm (Matched to Demo)
+    # G-Force < 0.5 or > 2.0 (Easier to trigger)
+    # Methane > 2.5% (Stable)
+    # CO > 50ppm (Stable)
+    # G-Force < 0.3 or > 2.5 (Less Sensitive)
+    if co > 50 or ch4 > 2.5 or haz > 50 or g_force < 0.3 or g_force > 2.5 or wbgt > 32:
         is_critical = True
         
-    if is_critical and score > 40:
-        score = 40
+    if is_critical:
+        score = 0
         
     return max(int(score), 0)
 
